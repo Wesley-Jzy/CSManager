@@ -5,26 +5,48 @@ function randomNoise() {
   return Math.random() * 10 - 5
 }
 
-// 比赛模拟函数，基于团队实力和随机因素计算比赛结果
-function simulateMatch(teamA, teamB, format = 'bo3') {
+// 改进的比赛模拟函数，考虑设施升级效果
+function simulateMatch(teamA, teamB, format = 'bo3', facilities = { trainingCenter: 1, gamingHouse: 1, analyticsOffice: 1 }) {
   let winsA = 0, winsB = 0
   const requiredWins = format === 'bo1' ? 1 : format === 'bo3' ? 2 : format === 'bo5' ? 3 : 16
 
-  // 计算团队实力
+  // 计算团队实力基础值
   const baseA = teamA.reduce((sum, p) => sum + p.aim + p.awareness + p.reflex, 0)
   const baseB = teamB.reduce((sum, p) => sum + p.aim + p.awareness + p.reflex, 0)
-
+  
+  // 应用设施加成
+  const teamWorkBonus = facilities.gamingHouse * 5 / 100; // 游戏之家提供5%/级的团队默契度
+  const prepBonus = facilities.analyticsOffice * 3 / 100; // 分析办公室提供3%/级的比赛准备加成
+  const intelBonus = facilities.analyticsOffice * 5 / 100; // 分析办公室提供5%/级的对手情报准确度
+  
+  // 计算总加成
+  const facilityMultiplier = 1 + teamWorkBonus + prepBonus;
+  
+  // 计算情报优势（降低对手随机性）
+  const opponentRandomnessFactor = Math.max(0.5, 1 - intelBonus);
+  
   // 比赛循环，直到一方达到所需的胜利场次
   while (winsA < requiredWins && winsB < requiredWins) {
-    const scoreA = baseA + randomNoise()
-    const scoreB = baseB + randomNoise()
+    // 应用设施加成到己方分数
+    const scoreA = baseA * facilityMultiplier + randomNoise()
+    
+    // 应用情报优势，减少对手随机性
+    const scoreB = baseB + (randomNoise() * opponentRandomnessFactor)
+    
     scoreA > scoreB ? winsA++ : winsB++
   }
 
   return { 
     teamAWins: winsA, 
     teamBWins: winsB,
-    winner: winsA > winsB ? 'teamA' : 'teamB'
+    winner: winsA > winsB ? 'teamA' : 'teamB',
+    // 返回额外信息用于显示
+    facilityBonus: {
+      teamWorkBonus: Math.round(teamWorkBonus * 100),
+      prepBonus: Math.round(prepBonus * 100),
+      intelBonus: Math.round(intelBonus * 100),
+      totalBonus: Math.round((facilityMultiplier - 1) * 100)
+    }
   }
 }
 
@@ -62,6 +84,7 @@ function MatchModule({ teamData, setTeamData }) {
   const [matchFormat, setMatchFormat] = useState('bo3')
   const [matchResult, setMatchResult] = useState(null)
   const [isMatchInProgress, setIsMatchInProgress] = useState(false)
+  const [showFacilityBonus, setShowFacilityBonus] = useState(false)
   
   // 选择选手参与比赛
   const togglePlayerSelection = (playerId) => {
@@ -89,7 +112,13 @@ function MatchModule({ teamData, setTeamData }) {
         teamData.players.find(player => player.id === id)
       )
       
-      const result = simulateMatch(myTeam, selectedOpponent.players, matchFormat)
+      // 传递设施信息给比赛模拟函数
+      const result = simulateMatch(
+        myTeam, 
+        selectedOpponent.players, 
+        matchFormat,
+        teamData.facilities
+      )
       
       // 更新比赛结果
       setMatchResult(result)
@@ -118,6 +147,12 @@ function MatchModule({ teamData, setTeamData }) {
   const resetMatch = () => {
     setMatchResult(null)
     setSelectedOpponent(null)
+    setShowFacilityBonus(false)
+  }
+
+  // 显示或隐藏设施加成详情
+  const toggleFacilityBonus = () => {
+    setShowFacilityBonus(!showFacilityBonus)
   }
 
   return (
@@ -173,7 +208,7 @@ function MatchModule({ teamData, setTeamData }) {
               <div className="mt-4">
                 <h3 className="text-lg font-semibold mb-2">比赛格式</h3>
                 <select 
-                  className="w-full p-2 border rounded"
+                  className="w-full p-2 border rounded bg-white text-gray-900"
                   value={matchFormat}
                   onChange={e => setMatchFormat(e.target.value)}
                 >
@@ -181,6 +216,29 @@ function MatchModule({ teamData, setTeamData }) {
                   <option value="bo3">BO3 (先赢2局)</option>
                   <option value="bo5">BO5 (先赢3局)</option>
                 </select>
+              </div>
+              
+              {/* 显示当前设施等级加成 */}
+              <div className="mt-4 p-3 bg-gray-50 rounded border">
+                <h3 className="text-sm font-medium mb-2">设施加成</h3>
+                <div className="text-sm">
+                  <div className="flex justify-between">
+                    <span>团队默契度:</span>
+                    <span>+{teamData.facilities.gamingHouse * 5}%</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>比赛准备:</span>
+                    <span>+{teamData.facilities.analyticsOffice * 3}%</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>对手情报:</span>
+                    <span>+{teamData.facilities.analyticsOffice * 5}%</span>
+                  </div>
+                  <div className="flex justify-between font-medium mt-1 pt-1 border-t">
+                    <span>总设施加成:</span>
+                    <span>+{teamData.facilities.gamingHouse * 5 + teamData.facilities.analyticsOffice * 3}%</span>
+                  </div>
+                </div>
               </div>
               
               <button 
@@ -222,6 +280,44 @@ function MatchModule({ teamData, setTeamData }) {
             {matchResult.winner === 'teamA' 
               ? `恭喜! 你的战队赢得了比赛和 $${selectedOpponent?.prize} 奖金!` 
               : '很遗憾，你的战队输掉了这场比赛。再接再厉!'}
+          </div>
+          
+          {/* 设施加成详情 */}
+          <div className="mb-4">
+            <button 
+              className="w-full py-2 px-4 bg-gray-100 hover:bg-gray-200 rounded font-medium text-gray-700 flex justify-between items-center"
+              onClick={toggleFacilityBonus}
+            >
+              <span>设施加成详情</span>
+              <span>{showFacilityBonus ? '▲' : '▼'}</span>
+            </button>
+            
+            {showFacilityBonus && (
+              <div className="mt-2 p-4 border rounded bg-gray-50">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="border rounded p-2">
+                    <div className="text-sm text-gray-600">团队默契度加成</div>
+                    <div className="font-medium">+{matchResult.facilityBonus.teamWorkBonus}%</div>
+                  </div>
+                  <div className="border rounded p-2">
+                    <div className="text-sm text-gray-600">比赛准备加成</div>
+                    <div className="font-medium">+{matchResult.facilityBonus.prepBonus}%</div>
+                  </div>
+                  <div className="border rounded p-2">
+                    <div className="text-sm text-gray-600">对手情报准确度</div>
+                    <div className="font-medium">+{matchResult.facilityBonus.intelBonus}%</div>
+                  </div>
+                  <div className="border rounded p-2 bg-blue-50">
+                    <div className="text-sm text-gray-600">总实力提升</div>
+                    <div className="font-medium">+{matchResult.facilityBonus.totalBonus}%</div>
+                  </div>
+                </div>
+                <div className="mt-3 text-sm text-gray-600">
+                  <p>• 团队默契度和比赛准备提高团队整体实力</p>
+                  <p>• 对手情报准确度减少对手的随机性表现</p>
+                </div>
+              </div>
+            )}
           </div>
           
           <button 
