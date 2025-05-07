@@ -1,0 +1,131 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+
+  color-scheme: light dark;
+  color: #213547;
+  background-color: #f3f4f6;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Dark mode overrides */
+@media (prefers-color-scheme: dark) {
+  :root {
+    color: #e5e7eb;
+    background-color: #1f2937;
+  }
+
+  .bg-white {
+    background-color: #374151 !important;
+  }
+
+  .bg-gray-50 {
+    background-color: #374151 !important;
+  }
+
+  .bg-gray-100 {
+    background-color: #374151 !important;
+  }
+
+  .text-gray-500, .text-gray-600, .text-gray-700 {
+    color: #d1d5db !important;
+  }
+
+  .text-gray-900 {
+    color: #f3f4f6 !important;
+  }
+
+  .border {
+    border-color: #4b5563 !important;
+  }
+
+  .border-gray-200, .border-gray-300 {
+    border-color: #6b7280 !important;
+  }
+  
+  /* 修复深色模式下的白底白字问题 */
+  .text-white {
+    color: #f3f4f6 !important;
+  }
+  
+  /* 确保卡片背景在深色模式下可见 */
+  .shadow {
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.3), 0 1px 2px 0 rgba(0, 0, 0, 0.2) !important;
+  }
+  
+  /* 确保所有背景色在深色模式下可见 */
+  .bg-blue-100 { background-color: #1e3a8a !important; }
+  .bg-blue-600 { background-color: #2563eb !important; }
+  .bg-green-600 { background-color: #059669 !important; }
+  .bg-yellow-600 { background-color: #d97706 !important; }
+  .bg-red-600 { background-color: #dc2626 !important; }
+  .bg-purple-600 { background-color: #7c3aed !important; }
+  
+  /* 确保所有文本在深色背景上可见 */
+  .bg-blue-100 .text-blue-800 { color: #bfdbfe !important; }
+  .bg-green-100 .text-green-800 { color: #a7f3d0 !important; }
+  .bg-red-100 .text-red-800 { color: #fecaca !important; }
+  
+  /* 确保按钮文本在深色模式下可见 */
+  button {
+    color: #f3f4f6 !important;
+  }
+  
+  /* 禁用按钮的颜色 */
+  button:disabled {
+    color: #9ca3af !important;
+  }
+}
+
+/* 强制应用浅色模式 */
+.light-mode {
+  color: #213547 !important;
+  background-color: #f3f4f6 !important;
+}
+
+.light-mode .bg-white {
+  background-color: #ffffff !important;
+}
+
+.light-mode .text-gray-500, .light-mode .text-gray-600, .light-mode .text-gray-700 {
+  color: #6b7280 !important;
+}
+
+.light-mode .text-gray-900 {
+  color: #111827 !important;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+/* Custom classes */
+.fade-in {
+  animation: fadeIn 0.5s ease-in;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.pulse {
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0% { opacity: 0.6; }
+  50% { opacity: 1; }
+  100% { opacity: 0.6; }
+}
