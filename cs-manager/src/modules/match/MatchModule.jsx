@@ -22,16 +22,23 @@ function simulateMatch(teamA, teamB, format = 'bo3', facilities = { trainingCent
   // 计算总加成
   const facilityMultiplier = 1 + teamWorkBonus + prepBonus;
   
-  // 计算情报优势（降低对手随机性）
-  const opponentRandomnessFactor = Math.max(0.5, 1 - intelBonus);
-  
   // 比赛循环，直到一方达到所需的胜利场次
   while (winsA < requiredWins && winsB < requiredWins) {
     // 应用设施加成到己方分数
     const scoreA = baseA * facilityMultiplier + randomNoise()
     
-    // 应用情报优势，减少对手随机性
-    const scoreB = baseB + (randomNoise() * opponentRandomnessFactor)
+    // 应用情报优势，仅抑制对手的正面爆发，不影响负面表现
+    let opponentNoise = randomNoise()
+    // 如果对手随机噪声为正值(爆发情况)，则根据情报优势降低其效果
+    if (opponentNoise > 0) {
+      opponentNoise = opponentNoise * Math.max(0.2, 1 - intelBonus);
+    }
+    // 如果是负值，保持原样，甚至可以稍微增强负面效果(对手被针对)
+    else {
+      opponentNoise = opponentNoise * (1 + intelBonus * 0.5);
+    }
+    
+    const scoreB = baseB + opponentNoise
     
     scoreA > scoreB ? winsA++ : winsB++
   }
