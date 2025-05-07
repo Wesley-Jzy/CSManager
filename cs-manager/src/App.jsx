@@ -6,6 +6,8 @@ import RecruitmentModule from './modules/recruitment/RecruitmentModule'
 import TeamManagementModule from './modules/team/TeamManagementModule'
 
 function App() {
+  console.log("App component initializing...");
+  
   const [activeModule, setActiveModule] = useState('dashboard')
   const [isDarkMode, setIsDarkMode] = useState(
     window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
@@ -53,17 +55,34 @@ function App() {
 
   // 渲染当前活跃的模块
   const renderActiveModule = () => {
-    switch(activeModule) {
-      case 'match':
-        return <MatchModule teamData={teamData} setTeamData={setTeamData} />
-      case 'player':
-        return <PlayerManagementModule teamData={teamData} setTeamData={setTeamData} />
-      case 'recruitment':
-        return <RecruitmentModule teamData={teamData} setTeamData={setTeamData} />
-      case 'team':
-        return <TeamManagementModule teamData={teamData} setTeamData={setTeamData} />
-      default:
-        return <Dashboard teamData={teamData} />
+    try {
+      switch(activeModule) {
+        case 'match':
+          console.log("Rendering MatchModule with teamData:", teamData);
+          return <MatchModule teamData={teamData} setTeamData={setTeamData} />
+        case 'player':
+          return <PlayerManagementModule teamData={teamData} setTeamData={setTeamData} />
+        case 'recruitment':
+          return <RecruitmentModule teamData={teamData} setTeamData={setTeamData} />
+        case 'team':
+          return <TeamManagementModule teamData={teamData} setTeamData={setTeamData} />
+        default:
+          return <Dashboard teamData={teamData} />
+      }
+    } catch (error) {
+      console.error("Error rendering module:", error);
+      return (
+        <div className="p-4 border border-red-500 bg-red-100 rounded-lg">
+          <h2 className="text-xl font-bold text-red-700 mb-2">模块加载出错</h2>
+          <p className="mb-4">渲染模块时发生错误，请尝试重新加载或者选择其他模块。</p>
+          <button 
+            className="px-4 py-2 bg-blue-600 text-white rounded"
+            onClick={() => setActiveModule('dashboard')}
+          >
+            返回仪表盘
+          </button>
+        </div>
+      );
     }
   }
 

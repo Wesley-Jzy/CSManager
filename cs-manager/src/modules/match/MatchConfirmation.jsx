@@ -1,5 +1,16 @@
 import { useState, useEffect } from 'react';
-import { MAPS, TACTICS, ROLES, calculateTeamStrength, FACILITY_BONUSES, TEAMS, SIDES, GAME_RULES } from './MatchUtils';
+import { 
+  MAPS, 
+  TACTICS, 
+  ROLES, 
+  calculateTeamStrength, 
+  calculateMatchupDetails,
+  FACILITY_BONUSES, 
+  TEAMS, 
+  SIDES, 
+  GAME_RULES,
+  RANDOM_FACTORS
+} from './MatchUtils';
 
 // 胜率计算相关常量
 const PROBABILITY_CONSTANTS = {
@@ -13,7 +24,9 @@ const PROBABILITY_CONSTANTS = {
 
 // 界面显示相关常量
 const UI_CONSTANTS = {
-  DECIMAL_PLACES: 1
+  DECIMAL_PLACES: 1,
+  PERCENT_DECIMAL_PLACES: 1,
+  COLLAPSED_SECTIONS_DEFAULT: ['randomFactors', 'formula', 'playerDetails']
 };
 
 /**
@@ -29,143 +42,113 @@ function MatchConfirmation({
   onConfirm,
   onBack
 }) {
-  const [winProbability, setWinProbability] = useState(0);
-  const [calculationDetails, setCalculationDetails] = useState(null);
+  const [matchupDetails, setMatchupDetails] = useState(null);
+  const [collapsedSections, setCollapsedSections] = useState(UI_CONSTANTS.COLLAPSED_SECTIONS_DEFAULT);
   
-  // 计算双方的实力和胜率
+  // 使用新的calculateMatchupDetails函数计算详细的比赛数据
   useEffect(() => {
-    if (!teamData || !opponentData || !mapKey || !tacticsSetup) return;
-    
-    // 计算T方和CT方的实力
-    const tSideStrengthA = calculateTeamStrength(
-      teamData.players,
-      tacticsSetup.roles,
-      tacticsSetup.tactics[SIDES.T],
-      mapKey,
-      SIDES.T
-    );
-    
-    const ctSideStrengthA = calculateTeamStrength(
-      teamData.players,
-      tacticsSetup.roles,
-      tacticsSetup.tactics[SIDES.CT],
-      mapKey,
-      SIDES.CT
-    );
-    
-    const tSideStrengthB = calculateTeamStrength(
-      opponentData.players,
-      opponentData.roles,
-      opponentData.tactics[SIDES.T],
-      mapKey,
-      SIDES.T
-    );
-    
-    const ctSideStrengthB = calculateTeamStrength(
-      opponentData.players,
-      opponentData.roles,
-      opponentData.tactics[SIDES.CT],
-      mapKey,
-      SIDES.CT
-    );
-    
-    // 应用设施加成
-    const teamWorkBonus = facilities.gamingHouse * FACILITY_BONUSES.GAMING_HOUSE_TEAMWORK;
-    const prepBonus = facilities.analyticsOffice * FACILITY_BONUSES.ANALYTICS_PREP;
-    const intelBonus = facilities.analyticsOffice * FACILITY_BONUSES.ANALYTICS_INTEL;
-    
-    const facilityMultiplier = 1 + teamWorkBonus + prepBonus;
-    
-    // 应用设施加成
-    const modifiedTSideStrengthA = tSideStrengthA * facilityMultiplier;
-    const modifiedCTSideStrengthA = ctSideStrengthA * facilityMultiplier;
-    
-    // 模拟计算T方和CT方的预期得分
-    const tSideExpectedScoreA = modifiedTSideStrengthA / (modifiedTSideStrengthA + ctSideStrengthB);
-    const ctSideExpectedScoreA = modifiedCTSideStrengthA / (modifiedCTSideStrengthA + tSideStrengthB);
-    
-    // 估算12回合后的半场比分（期望值）
-    const firstHalfScoreA = GAME_RULES.ROUNDS_FIRST_HALF * tSideExpectedScoreA;
-    const firstHalfScoreB = GAME_RULES.ROUNDS_FIRST_HALF - firstHalfScoreA;
-    
-    const secondHalfScoreA = GAME_RULES.ROUNDS_FIRST_HALF * ctSideExpectedScoreA;
-    const secondHalfScoreB = GAME_RULES.ROUNDS_FIRST_HALF - secondHalfScoreA;
-    
-    // 总比分（期望值）
-    const totalScoreA = firstHalfScoreA + secondHalfScoreA;
-    const totalScoreB = firstHalfScoreB + secondHalfScoreB;
-    
-    // 胜率估计
-    const winProbability = totalScoreA > totalScoreB 
-      ? Math.min(
-          PROBABILITY_CONSTANTS.MAX_WIN_PROBABILITY, 
-          PROBABILITY_CONSTANTS.BASE_PROBABILITY + (totalScoreA - totalScoreB) * PROBABILITY_CONSTANTS.SCORE_IMPACT_FACTOR
-        )
-      : Math.max(
-          PROBABILITY_CONSTANTS.MIN_WIN_PROBABILITY, 
-          PROBABILITY_CONSTANTS.BASE_PROBABILITY - (totalScoreB - totalScoreA) * PROBABILITY_CONSTANTS.SCORE_IMPACT_FACTOR
-        );
-    
-    setWinProbability(winProbability);
-    
-    // 计算各个选手的有效属性
-    const playerEffectiveStats = teamData.players.map((player, index) => {
-      const role = tacticsSetup.roles[index];
-      const roleData = ROLES[role];
-      
-      // T方属性
-      const tTacticData = TACTICS[tacticsSetup.tactics[SIDES.T]];
-      const tAim = player.aim * roleData.aimMultiplier * tTacticData.aimMultiplier;
-      const tAwareness = player.awareness * roleData.awarenessMultiplier * tTacticData.awarenessMultiplier;
-      const tReflex = player.reflex * roleData.reflexMultiplier * tTacticData.reflexMultiplier;
-      
-      // CT方属性
-      const ctTacticData = TACTICS[tacticsSetup.tactics[SIDES.CT]];
-      const ctAim = player.aim * roleData.aimMultiplier * ctTacticData.aimMultiplier;
-      const ctAwareness = player.awareness * roleData.awarenessMultiplier * ctTacticData.awarenessMultiplier;
-      const ctReflex = player.reflex * roleData.reflexMultiplier * ctTacticData.reflexMultiplier;
-      
-      return {
-        player,
-        role,
-        [SIDES.T]: { aim: tAim, awareness: tAwareness, reflex: tReflex },
-        [SIDES.CT]: { aim: ctAim, awareness: ctAwareness, reflex: ctReflex },
-      };
+    console.log("MatchConfirmation useEffect triggered with:", {
+      teamData: teamData ? "present" : "missing",
+      opponentData: opponentData ? "present" : "missing",
+      mapKey: mapKey || "missing",
+      tacticsSetup: tacticsSetup ? `present with ${tacticsSetup.roles?.length || 0} roles` : "missing",
+      facilities: facilities ? `present with levels ${JSON.stringify(facilities)}` : "missing"
     });
     
-    // 保存详细计算过程
-    setCalculationDetails({
-      map: MAPS[mapKey],
-      tSideStrengthA,
-      ctSideStrengthA,
-      tSideStrengthB,
-      ctSideStrengthB,
-      facilityBonus: {
-        teamWorkBonus: Math.round(teamWorkBonus * 100),
-        prepBonus: Math.round(prepBonus * 100),
-        intelBonus: Math.round(intelBonus * 100),
-        totalBonus: Math.round((teamWorkBonus + prepBonus) * 100)
-      },
-      modifiedTSideStrengthA,
-      modifiedCTSideStrengthA,
-      expectedScores: {
-        firstHalf: { A: firstHalfScoreA, B: firstHalfScoreB },
-        secondHalf: { A: secondHalfScoreA, B: secondHalfScoreB },
-        total: { A: totalScoreA, B: totalScoreB }
-      },
-      playerEffectiveStats
-    });
+    if (!teamData || !opponentData || !mapKey || !tacticsSetup) {
+      console.error("Missing required data for MatchConfirmation", {
+        teamData: !!teamData,
+        opponentData: !!opponentData,
+        mapKey,
+        tacticsSetup: !!tacticsSetup
+      });
+      return;
+    }
+    
+    // 确保数据结构正确
+    if (!tacticsSetup.tactics || !tacticsSetup.roles) {
+      console.error("Invalid tacticsSetup structure:", tacticsSetup);
+      return;
+    }
+    
+    // 确保地图存在
+    if (!MAPS[mapKey]) {
+      console.error(`Invalid map key: ${mapKey}. Available maps:`, Object.keys(MAPS));
+      return;
+    }
+    
+    const teamAData = {
+      players: teamData.players,
+      roles: tacticsSetup.roles,
+      tactics: tacticsSetup.tactics
+    };
+    
+    const teamBData = {
+      players: opponentData.players,
+      roles: opponentData.roles,
+      tactics: opponentData.tactics
+    };
+    
+    try {
+      console.log("Calling calculateMatchupDetails with:", {
+        teamAData: `${teamAData.players.length} players, ${teamAData.roles.length} roles`,
+        teamBData: `${teamBData.players.length} players, ${teamBData.roles.length} roles`,
+        mapKey,
+        facilities
+      });
+      
+      const details = calculateMatchupDetails(teamAData, teamBData, mapKey, facilities);
+      console.log("Matchup details calculated successfully:", Object.keys(details));
+      setMatchupDetails(details);
+    } catch (error) {
+      console.error("Error calculating matchup details:", error);
+      // 尝试创建一个基本的回退对象，以防计算失败
+      const fallbackMap = MAPS[mapKey] || Object.values(MAPS)[0];
+      setMatchupDetails({
+        map: fallbackMap,
+        winProbability: { simulated: 0.5 },
+        baseStrength: { tSide: { A: 0, B: 0 }, ctSide: { A: 0, B: 0 } },
+        modifiedStrength: { tSide: { A: 0, B: 0 }, ctSide: { A: 0, B: 0 } },
+        facilityBonus: { teamWorkBonus: 0, prepBonus: 0, intelBonus: 0, totalBonus: 0 },
+        roundWinProbability: { tSide: { adjusted: 0.5 }, ctSide: { adjusted: 0.5 } },
+        expectedScores: {
+          firstHalf: { A: 6, B: 6 }, 
+          secondHalf: { A: 6, B: 6 },
+          total: { A: 12, B: 12 }
+        }
+      });
+    }
     
   }, [teamData, opponentData, mapKey, tacticsSetup, facilities]);
   
+  // 切换折叠部分
+  const toggleSection = (section) => {
+    setCollapsedSections(prev => 
+      prev.includes(section)
+        ? prev.filter(s => s !== section)
+        : [...prev, section]
+    );
+  };
+  
+  // 判断部分是否被折叠
+  const isSectionCollapsed = (section) => {
+    return collapsedSections.includes(section);
+  };
+  
   // 格式化百分比
-  const formatPercent = (value) => {
-    return `${Math.round(value * 100)}%`;
+  const formatPercent = (value, decimalPlaces = UI_CONSTANTS.PERCENT_DECIMAL_PLACES) => {
+    return `${(value * 100).toFixed(decimalPlaces)}%`;
   };
   
   // 格式化数字
-  const formatNumber = (value) => {
-    return value.toFixed(UI_CONSTANTS.DECIMAL_PLACES);
+  const formatNumber = (value, decimalPlaces = UI_CONSTANTS.DECIMAL_PLACES) => {
+    return value.toFixed(decimalPlaces);
+  };
+  
+  // 格式化差距百分比
+  const formatDifference = (valueA, valueB) => {
+    const ratio = valueA / valueB;
+    return formatPercent(ratio - 1);
   };
   
   // 开始比赛
@@ -178,7 +161,7 @@ function MatchConfirmation({
     onBack();
   };
   
-  if (!calculationDetails) {
+  if (!matchupDetails) {
     return <div className="p-6 text-center">正在计算对战信息...</div>;
   }
   
@@ -203,30 +186,35 @@ function MatchConfirmation({
         <div className="flex justify-center items-center mb-4">
           <div className="text-center px-4 py-2 bg-blue-100 rounded">
             <div className="text-sm text-gray-600">地图</div>
-            <div className="font-medium">{calculationDetails.map.name}</div>
+            <div className="font-medium">{matchupDetails.map.name}</div>
+            <div className="text-xs text-gray-500 mt-1">
+              {matchupDetails.map.ctSided > 1 
+                ? `CT倾向性 +${formatPercent(matchupDetails.map.ctSided - 1)}`
+                : `T倾向性 +${formatPercent(2 - matchupDetails.map.ctSided - 1)}`}
+            </div>
           </div>
         </div>
         
         <div className="flex justify-center mb-4">
           <div className="w-full max-w-md bg-gray-200 rounded-full h-4">
             <div 
-              className={`h-4 rounded-full ${winProbability > PROBABILITY_CONSTANTS.BASE_PROBABILITY ? 'bg-green-500' : 'bg-red-500'}`}
-              style={{ width: `${Math.max(PROBABILITY_CONSTANTS.PROGRESS_BAR_MIN_WIDTH, Math.min(PROBABILITY_CONSTANTS.PROGRESS_BAR_MAX_WIDTH, winProbability * 100))}%` }}
+              className={`h-4 rounded-full ${matchupDetails.winProbability.simulated > PROBABILITY_CONSTANTS.BASE_PROBABILITY ? 'bg-green-500' : 'bg-red-500'}`}
+              style={{ width: `${Math.max(PROBABILITY_CONSTANTS.PROGRESS_BAR_MIN_WIDTH, Math.min(PROBABILITY_CONSTANTS.PROGRESS_BAR_MAX_WIDTH, matchupDetails.winProbability.simulated * 100))}%` }}
             ></div>
           </div>
         </div>
         
         <div className="text-center mb-4">
           <div className="text-sm text-gray-600">预估胜率</div>
-          <div className={`text-2xl font-bold ${winProbability > PROBABILITY_CONSTANTS.BASE_PROBABILITY ? 'text-green-600' : 'text-red-600'}`}>
-            {formatPercent(winProbability)}
+          <div className={`text-2xl font-bold ${matchupDetails.winProbability.simulated > PROBABILITY_CONSTANTS.BASE_PROBABILITY ? 'text-green-600' : 'text-red-600'}`}>
+            {formatPercent(matchupDetails.winProbability.simulated, 1)}
           </div>
         </div>
       </div>
       
       {/* 实力对比 */}
       <div className="border rounded-lg overflow-hidden">
-        <div className="bg-gray-50 px-4 py-3 border-b">
+        <div className="bg-gray-50 px-4 py-3 border-b flex justify-between items-center">
           <h3 className="font-medium">双方实力对比</h3>
         </div>
         
@@ -242,40 +230,107 @@ function MatchConfirmation({
             </thead>
             <tbody>
               <tr className="border-b">
-                <td className="p-2">T方实力</td>
-                <td className="p-2 text-center">{formatNumber(calculationDetails.tSideStrengthA)}</td>
-                <td className="p-2 text-center">{formatNumber(calculationDetails.tSideStrengthB)}</td>
-                <td className={`p-2 text-center ${calculationDetails.tSideStrengthA > calculationDetails.tSideStrengthB ? 'text-green-600' : 'text-red-600'}`}>
-                  {formatPercent((calculationDetails.tSideStrengthA / calculationDetails.tSideStrengthB) - 1)}
+                <td className="p-2">T方基础实力</td>
+                <td className="p-2 text-center">{formatNumber(matchupDetails.baseStrength.tSide.A)}</td>
+                <td className="p-2 text-center">{formatNumber(matchupDetails.baseStrength.tSide.B)}</td>
+                <td className={`p-2 text-center ${matchupDetails.baseStrength.tSide.A > matchupDetails.baseStrength.tSide.B ? 'text-green-600' : 'text-red-600'}`}>
+                  {formatDifference(matchupDetails.baseStrength.tSide.A, matchupDetails.baseStrength.tSide.B)}
                 </td>
               </tr>
               <tr className="border-b">
-                <td className="p-2">CT方实力</td>
-                <td className="p-2 text-center">{formatNumber(calculationDetails.ctSideStrengthA)}</td>
-                <td className="p-2 text-center">{formatNumber(calculationDetails.ctSideStrengthB)}</td>
-                <td className={`p-2 text-center ${calculationDetails.ctSideStrengthA > calculationDetails.ctSideStrengthB ? 'text-green-600' : 'text-red-600'}`}>
-                  {formatPercent((calculationDetails.ctSideStrengthA / calculationDetails.ctSideStrengthB) - 1)}
+                <td className="p-2">CT方基础实力</td>
+                <td className="p-2 text-center">{formatNumber(matchupDetails.baseStrength.ctSide.A)}</td>
+                <td className="p-2 text-center">{formatNumber(matchupDetails.baseStrength.ctSide.B)}</td>
+                <td className={`p-2 text-center ${matchupDetails.baseStrength.ctSide.A > matchupDetails.baseStrength.ctSide.B ? 'text-green-600' : 'text-red-600'}`}>
+                  {formatDifference(matchupDetails.baseStrength.ctSide.A, matchupDetails.baseStrength.ctSide.B)}
                 </td>
               </tr>
               <tr className="border-b">
-                <td className="p-2">加成后T方实力</td>
-                <td className="p-2 text-center">{formatNumber(calculationDetails.modifiedTSideStrengthA)}</td>
-                <td className="p-2 text-center">{formatNumber(calculationDetails.tSideStrengthB)}</td>
-                <td className={`p-2 text-center ${calculationDetails.modifiedTSideStrengthA > calculationDetails.tSideStrengthB ? 'text-green-600' : 'text-red-600'}`}>
-                  {formatPercent((calculationDetails.modifiedTSideStrengthA / calculationDetails.tSideStrengthB) - 1)}
+                <td className="p-2">设施加成后T方实力</td>
+                <td className="p-2 text-center">{formatNumber(matchupDetails.modifiedStrength.tSide.A)}</td>
+                <td className="p-2 text-center">{formatNumber(matchupDetails.modifiedStrength.tSide.B)}</td>
+                <td className={`p-2 text-center ${matchupDetails.modifiedStrength.tSide.A > matchupDetails.modifiedStrength.tSide.B ? 'text-green-600' : 'text-red-600'}`}>
+                  {formatDifference(matchupDetails.modifiedStrength.tSide.A, matchupDetails.modifiedStrength.tSide.B)}
+                </td>
+              </tr>
+              <tr className="border-b">
+                <td className="p-2">设施加成后CT方实力</td>
+                <td className="p-2 text-center">{formatNumber(matchupDetails.modifiedStrength.ctSide.A)}</td>
+                <td className="p-2 text-center">{formatNumber(matchupDetails.modifiedStrength.ctSide.B)}</td>
+                <td className={`p-2 text-center ${matchupDetails.modifiedStrength.ctSide.A > matchupDetails.modifiedStrength.ctSide.B ? 'text-green-600' : 'text-red-600'}`}>
+                  {formatDifference(matchupDetails.modifiedStrength.ctSide.A, matchupDetails.modifiedStrength.ctSide.B)}
+                </td>
+              </tr>
+              <tr className="border-b">
+                <td className="p-2">T方回合胜率</td>
+                <td className="p-2 text-center">{formatPercent(matchupDetails.roundWinProbability.tSide.adjusted)}</td>
+                <td className="p-2 text-center">{formatPercent(1 - matchupDetails.roundWinProbability.tSide.adjusted)}</td>
+                <td className={`p-2 text-center ${matchupDetails.roundWinProbability.tSide.adjusted > 0.5 ? 'text-green-600' : 'text-red-600'}`}>
+                  {formatDifference(matchupDetails.roundWinProbability.tSide.adjusted, 1 - matchupDetails.roundWinProbability.tSide.adjusted)}
                 </td>
               </tr>
               <tr>
-                <td className="p-2">加成后CT方实力</td>
-                <td className="p-2 text-center">{formatNumber(calculationDetails.modifiedCTSideStrengthA)}</td>
-                <td className="p-2 text-center">{formatNumber(calculationDetails.ctSideStrengthB)}</td>
-                <td className={`p-2 text-center ${calculationDetails.modifiedCTSideStrengthA > calculationDetails.ctSideStrengthB ? 'text-green-600' : 'text-red-600'}`}>
-                  {formatPercent((calculationDetails.modifiedCTSideStrengthA / calculationDetails.ctSideStrengthB) - 1)}
+                <td className="p-2">CT方回合胜率</td>
+                <td className="p-2 text-center">{formatPercent(matchupDetails.roundWinProbability.ctSide.adjusted)}</td>
+                <td className="p-2 text-center">{formatPercent(1 - matchupDetails.roundWinProbability.ctSide.adjusted)}</td>
+                <td className={`p-2 text-center ${matchupDetails.roundWinProbability.ctSide.adjusted > 0.5 ? 'text-green-600' : 'text-red-600'}`}>
+                  {formatDifference(matchupDetails.roundWinProbability.ctSide.adjusted, 1 - matchupDetails.roundWinProbability.ctSide.adjusted)}
                 </td>
               </tr>
             </tbody>
           </table>
         </div>
+      </div>
+      
+      {/* 公式与随机因素 */}
+      <div className="border rounded-lg overflow-hidden">
+        <div className="bg-gray-50 px-4 py-3 border-b flex justify-between items-center cursor-pointer"
+             onClick={() => toggleSection('formula')}>
+          <h3 className="font-medium">回合胜负计算公式与随机因素</h3>
+          <div>{isSectionCollapsed('formula') ? '展开 ▼' : '收起 ▲'}</div>
+        </div>
+        
+        {!isSectionCollapsed('formula') && (
+          <div className="p-4">
+            <div className="mb-4">
+              <div className="text-sm font-medium mb-1">回合胜负决定公式:</div>
+              <div className="p-3 bg-gray-50 rounded border text-sm font-mono">
+                胜者 = (A队基础实力 × 设施加成 × A队随机因子) &gt; (B队基础实力 × B队随机因子) ? A队 : B队
+              </div>
+              <div className="mt-2 text-xs text-gray-600">
+                • 随机因子范围: {RANDOM_FACTORS.MIN} ~ {RANDOM_FACTORS.MAX}<br />
+                • 设施加成: +{matchupDetails.facilityBonus.totalBonus}%<br />
+                • 情报加成效果: 抑制对手正面爆发至最多 {formatPercent(1 - RANDOM_FACTORS.INTEL_MIN_REDUCTION)}
+              </div>
+            </div>
+            
+            <div className="mb-4">
+              <div className="text-sm font-medium mb-1">随机因子影响估计:</div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="p-3 bg-gray-50 rounded border">
+                  <div className="text-sm font-medium">T方回合</div>
+                  <div className="text-xs mt-1">
+                    • 基础胜率: {formatPercent(matchupDetails.roundWinProbability.tSide.base)}<br />
+                    • 随机因子影响: ×{formatNumber(matchupDetails.randomFactors.impact.tSide, 2)}<br />
+                    • 最终回合胜率: {formatPercent(matchupDetails.roundWinProbability.tSide.adjusted)}
+                  </div>
+                </div>
+                <div className="p-3 bg-gray-50 rounded border">
+                  <div className="text-sm font-medium">CT方回合</div>
+                  <div className="text-xs mt-1">
+                    • 基础胜率: {formatPercent(matchupDetails.roundWinProbability.ctSide.base)}<br />
+                    • 随机因子影响: ×{formatNumber(matchupDetails.randomFactors.impact.ctSide, 2)}<br />
+                    • 最终回合胜率: {formatPercent(matchupDetails.roundWinProbability.ctSide.adjusted)}
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <div className="text-xs text-gray-600 mt-3">
+              注意: 上述数据是基于数学期望估算的，实际比赛中每回合的随机因子会有所不同，可能导致比赛结果有较大波动。
+            </div>
+          </div>
+        )}
       </div>
       
       {/* 预期比分 */}
@@ -291,26 +346,51 @@ function MatchConfirmation({
                 <th className="p-2 text-left">阶段</th>
                 <th className="p-2 text-center">{teamData.name}</th>
                 <th className="p-2 text-center">{opponentData.name}</th>
+                <th className="p-2 text-center">领先方</th>
               </tr>
             </thead>
             <tbody>
               <tr className="border-b">
                 <td className="p-2">上半场 (您为T方)</td>
-                <td className="p-2 text-center font-medium">{formatNumber(calculationDetails.expectedScores.firstHalf.A)}</td>
-                <td className="p-2 text-center font-medium">{formatNumber(calculationDetails.expectedScores.firstHalf.B)}</td>
+                <td className="p-2 text-center font-medium">{formatNumber(matchupDetails.expectedScores.firstHalf.A)}</td>
+                <td className="p-2 text-center font-medium">{formatNumber(matchupDetails.expectedScores.firstHalf.B)}</td>
+                <td className="p-2 text-center font-medium">
+                  {matchupDetails.expectedScores.firstHalf.A > matchupDetails.expectedScores.firstHalf.B 
+                    ? <span className="text-green-600">您 (+{formatNumber(matchupDetails.expectedScores.firstHalf.A - matchupDetails.expectedScores.firstHalf.B)})</span>
+                    : matchupDetails.expectedScores.firstHalf.A < matchupDetails.expectedScores.firstHalf.B
+                      ? <span className="text-red-600">对手 (+{formatNumber(matchupDetails.expectedScores.firstHalf.B - matchupDetails.expectedScores.firstHalf.A)})</span>
+                      : <span className="text-gray-600">平</span>
+                  }
+                </td>
               </tr>
               <tr className="border-b">
                 <td className="p-2">下半场 (您为CT方)</td>
-                <td className="p-2 text-center font-medium">{formatNumber(calculationDetails.expectedScores.secondHalf.A)}</td>
-                <td className="p-2 text-center font-medium">{formatNumber(calculationDetails.expectedScores.secondHalf.B)}</td>
+                <td className="p-2 text-center font-medium">{formatNumber(matchupDetails.expectedScores.secondHalf.A)}</td>
+                <td className="p-2 text-center font-medium">{formatNumber(matchupDetails.expectedScores.secondHalf.B)}</td>
+                <td className="p-2 text-center font-medium">
+                  {matchupDetails.expectedScores.secondHalf.A > matchupDetails.expectedScores.secondHalf.B 
+                    ? <span className="text-green-600">您 (+{formatNumber(matchupDetails.expectedScores.secondHalf.A - matchupDetails.expectedScores.secondHalf.B)})</span>
+                    : matchupDetails.expectedScores.secondHalf.A < matchupDetails.expectedScores.secondHalf.B
+                      ? <span className="text-red-600">对手 (+{formatNumber(matchupDetails.expectedScores.secondHalf.B - matchupDetails.expectedScores.secondHalf.A)})</span>
+                      : <span className="text-gray-600">平</span>
+                  }
+                </td>
               </tr>
               <tr>
                 <td className="p-2 font-medium">总比分</td>
-                <td className={`p-2 text-center font-bold ${calculationDetails.expectedScores.total.A > calculationDetails.expectedScores.total.B ? 'text-green-600' : 'text-red-600'}`}>
-                  {formatNumber(calculationDetails.expectedScores.total.A)}
+                <td className={`p-2 text-center font-bold ${matchupDetails.expectedScores.total.A > matchupDetails.expectedScores.total.B ? 'text-green-600' : 'text-red-600'}`}>
+                  {formatNumber(matchupDetails.expectedScores.total.A)}
                 </td>
-                <td className={`p-2 text-center font-bold ${calculationDetails.expectedScores.total.B > calculationDetails.expectedScores.total.A ? 'text-green-600' : 'text-red-600'}`}>
-                  {formatNumber(calculationDetails.expectedScores.total.B)}
+                <td className={`p-2 text-center font-bold ${matchupDetails.expectedScores.total.B > matchupDetails.expectedScores.total.A ? 'text-green-600' : 'text-red-600'}`}>
+                  {formatNumber(matchupDetails.expectedScores.total.B)}
+                </td>
+                <td className="p-2 text-center font-medium">
+                  {matchupDetails.expectedScores.total.A > matchupDetails.expectedScores.total.B 
+                    ? <span className="text-green-600">您 (+{formatNumber(matchupDetails.expectedScores.total.A - matchupDetails.expectedScores.total.B)})</span>
+                    : matchupDetails.expectedScores.total.A < matchupDetails.expectedScores.total.B
+                      ? <span className="text-red-600">对手 (+{formatNumber(matchupDetails.expectedScores.total.B - matchupDetails.expectedScores.total.A)})</span>
+                      : <span className="text-gray-600">平</span>
+                  }
                 </td>
               </tr>
             </tbody>
@@ -331,22 +411,22 @@ function MatchConfirmation({
         <div className="p-4 grid grid-cols-2 sm:grid-cols-4 gap-4">
           <div className="p-2 bg-blue-50 border rounded text-center">
             <div className="text-sm text-gray-600">团队默契度</div>
-            <div className="font-medium text-blue-600">+{calculationDetails.facilityBonus.teamWorkBonus}%</div>
+            <div className="font-medium text-blue-600">+{matchupDetails.facilityBonus.teamWorkBonus}%</div>
             <div className="text-xs mt-1">游戏之家 LV.{facilities.gamingHouse}</div>
           </div>
           <div className="p-2 bg-blue-50 border rounded text-center">
             <div className="text-sm text-gray-600">比赛准备</div>
-            <div className="font-medium text-blue-600">+{calculationDetails.facilityBonus.prepBonus}%</div>
+            <div className="font-medium text-blue-600">+{matchupDetails.facilityBonus.prepBonus}%</div>
             <div className="text-xs mt-1">分析办公室 LV.{facilities.analyticsOffice}</div>
           </div>
           <div className="p-2 bg-blue-50 border rounded text-center">
             <div className="text-sm text-gray-600">情报优势</div>
-            <div className="font-medium text-blue-600">+{calculationDetails.facilityBonus.intelBonus}%</div>
+            <div className="font-medium text-blue-600">+{matchupDetails.facilityBonus.intelBonus}%</div>
             <div className="text-xs mt-1">分析办公室 LV.{facilities.analyticsOffice}</div>
           </div>
           <div className="p-2 bg-green-50 border border-green-200 rounded text-center">
             <div className="text-sm text-gray-600">总设施加成</div>
-            <div className="font-medium text-green-600">+{calculationDetails.facilityBonus.totalBonus}%</div>
+            <div className="font-medium text-green-600">+{matchupDetails.facilityBonus.totalBonus}%</div>
             <div className="text-xs mt-1">应用于总体实力</div>
           </div>
         </div>
@@ -354,74 +434,81 @@ function MatchConfirmation({
       
       {/* 选手属性详情 */}
       <div className="border rounded-lg overflow-hidden">
-        <div className="bg-gray-50 px-4 py-3 border-b">
+        <div className="bg-gray-50 px-4 py-3 border-b flex justify-between items-center cursor-pointer"
+             onClick={() => toggleSection('playerDetails')}>
           <h3 className="font-medium">选手角色和有效属性</h3>
+          <div>{isSectionCollapsed('playerDetails') ? '展开 ▼' : '收起 ▲'}</div>
         </div>
         
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-gray-100">
-                <th className="p-2 text-left">选手</th>
-                <th className="p-2 text-left">角色</th>
-                <th className="p-2 text-center" colSpan="3">T方属性</th>
-                <th className="p-2 text-center" colSpan="3">CT方属性</th>
-              </tr>
-              <tr className="bg-gray-50">
-                <th className="p-2"></th>
-                <th className="p-2"></th>
-                <th className="p-2 text-center">瞄准</th>
-                <th className="p-2 text-center">意识</th>
-                <th className="p-2 text-center">反应</th>
-                <th className="p-2 text-center">瞄准</th>
-                <th className="p-2 text-center">意识</th>
-                <th className="p-2 text-center">反应</th>
-              </tr>
-            </thead>
-            <tbody>
-              {calculationDetails.playerEffectiveStats.map((stats, index) => (
-                <tr key={index} className="border-b">
-                  <td className="p-2">{stats.player.name}</td>
-                  <td className="p-2">{ROLES[stats.role].name}</td>
-                  <td className="p-2 text-center">
-                    <span className={`px-1 rounded ${stats[SIDES.T].aim > stats.player.aim ? 'bg-green-100' : stats[SIDES.T].aim < stats.player.aim ? 'bg-red-100' : ''}`}>
-                      {formatNumber(stats[SIDES.T].aim)}
-                    </span>
-                  </td>
-                  <td className="p-2 text-center">
-                    <span className={`px-1 rounded ${stats[SIDES.T].awareness > stats.player.awareness ? 'bg-green-100' : stats[SIDES.T].awareness < stats.player.awareness ? 'bg-red-100' : ''}`}>
-                      {formatNumber(stats[SIDES.T].awareness)}
-                    </span>
-                  </td>
-                  <td className="p-2 text-center">
-                    <span className={`px-1 rounded ${stats[SIDES.T].reflex > stats.player.reflex ? 'bg-green-100' : stats[SIDES.T].reflex < stats.player.reflex ? 'bg-red-100' : ''}`}>
-                      {formatNumber(stats[SIDES.T].reflex)}
-                    </span>
-                  </td>
-                  <td className="p-2 text-center">
-                    <span className={`px-1 rounded ${stats[SIDES.CT].aim > stats.player.aim ? 'bg-green-100' : stats[SIDES.CT].aim < stats.player.aim ? 'bg-red-100' : ''}`}>
-                      {formatNumber(stats[SIDES.CT].aim)}
-                    </span>
-                  </td>
-                  <td className="p-2 text-center">
-                    <span className={`px-1 rounded ${stats[SIDES.CT].awareness > stats.player.awareness ? 'bg-green-100' : stats[SIDES.CT].awareness < stats.player.awareness ? 'bg-red-100' : ''}`}>
-                      {formatNumber(stats[SIDES.CT].awareness)}
-                    </span>
-                  </td>
-                  <td className="p-2 text-center">
-                    <span className={`px-1 rounded ${stats[SIDES.CT].reflex > stats.player.reflex ? 'bg-green-100' : stats[SIDES.CT].reflex < stats.player.reflex ? 'bg-red-100' : ''}`}>
-                      {formatNumber(stats[SIDES.CT].reflex)}
-                    </span>
-                  </td>
+        {!isSectionCollapsed('playerDetails') && (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-gray-100">
+                  <th className="p-2 text-left">选手</th>
+                  <th className="p-2 text-left">角色</th>
+                  <th className="p-2 text-center" colSpan="3">T方属性</th>
+                  <th className="p-2 text-center" colSpan="3">CT方属性</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        
-        <div className="p-3 text-xs text-gray-500 bg-gray-50 border-t">
-          说明：选手属性会根据所选角色和战术风格被调整，绿色背景表示加成，红色背景表示减益
-        </div>
+                <tr className="bg-gray-50">
+                  <th className="p-2"></th>
+                  <th className="p-2"></th>
+                  <th className="p-2 text-center">瞄准</th>
+                  <th className="p-2 text-center">意识</th>
+                  <th className="p-2 text-center">反应</th>
+                  <th className="p-2 text-center">瞄准</th>
+                  <th className="p-2 text-center">意识</th>
+                  <th className="p-2 text-center">反应</th>
+                </tr>
+              </thead>
+              <tbody>
+                {matchupDetails.playerDetails.map((stats, index) => (
+                  <tr key={index} className="border-b">
+                    <td className="p-2">{stats.player.name}</td>
+                    <td className="p-2">{ROLES[stats.role].name}</td>
+                    <td className="p-2 text-center">
+                      <span className={`px-1 rounded ${stats.effectiveStats[SIDES.T].aim > stats.baseStats.aim ? 'bg-green-100' : stats.effectiveStats[SIDES.T].aim < stats.baseStats.aim ? 'bg-red-100' : ''}`}>
+                        {formatNumber(stats.effectiveStats[SIDES.T].aim)}
+                      </span>
+                    </td>
+                    <td className="p-2 text-center">
+                      <span className={`px-1 rounded ${stats.effectiveStats[SIDES.T].awareness > stats.baseStats.awareness ? 'bg-green-100' : stats.effectiveStats[SIDES.T].awareness < stats.baseStats.awareness ? 'bg-red-100' : ''}`}>
+                        {formatNumber(stats.effectiveStats[SIDES.T].awareness)}
+                      </span>
+                    </td>
+                    <td className="p-2 text-center">
+                      <span className={`px-1 rounded ${stats.effectiveStats[SIDES.T].reflex > stats.baseStats.reflex ? 'bg-green-100' : stats.effectiveStats[SIDES.T].reflex < stats.baseStats.reflex ? 'bg-red-100' : ''}`}>
+                        {formatNumber(stats.effectiveStats[SIDES.T].reflex)}
+                      </span>
+                    </td>
+                    <td className="p-2 text-center">
+                      <span className={`px-1 rounded ${stats.effectiveStats[SIDES.CT].aim > stats.baseStats.aim ? 'bg-green-100' : stats.effectiveStats[SIDES.CT].aim < stats.baseStats.aim ? 'bg-red-100' : ''}`}>
+                        {formatNumber(stats.effectiveStats[SIDES.CT].aim)}
+                      </span>
+                    </td>
+                    <td className="p-2 text-center">
+                      <span className={`px-1 rounded ${stats.effectiveStats[SIDES.CT].awareness > stats.baseStats.awareness ? 'bg-green-100' : stats.effectiveStats[SIDES.CT].awareness < stats.baseStats.awareness ? 'bg-red-100' : ''}`}>
+                        {formatNumber(stats.effectiveStats[SIDES.CT].awareness)}
+                      </span>
+                    </td>
+                    <td className="p-2 text-center">
+                      <span className={`px-1 rounded ${stats.effectiveStats[SIDES.CT].reflex > stats.baseStats.reflex ? 'bg-green-100' : stats.effectiveStats[SIDES.CT].reflex < stats.baseStats.reflex ? 'bg-red-100' : ''}`}>
+                        {formatNumber(stats.effectiveStats[SIDES.CT].reflex)}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          
+            <div className="p-3 text-xs text-gray-500 bg-gray-50 border-t">
+              <div className="mb-1">属性计算公式: 基础属性 × 角色系数 × 战术系数 = 实际属性</div>
+              <div>
+                • 绿色表示属性提升 • 红色表示属性降低
+              </div>
+            </div>
+          </div>
+        )}
       </div>
       
       {/* 确认按钮 */}

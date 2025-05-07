@@ -106,11 +106,18 @@ function TacticsSetup({
   
   // 提交战术和角色设置
   const confirmTactics = () => {
+    console.log("Confirming tactics and roles:", { tactics, playerRoles });
+    
     if (areAllRolesAssigned()) {
-      onTacticsConfirmed({
+      const tacticsData = {
         tactics: tactics,
         roles: playerRoles
-      });
+      };
+      
+      console.log("Submitting tactics data to parent:", tacticsData);
+      onTacticsConfirmed(tacticsData);
+    } else {
+      console.error("Cannot confirm tactics - not all roles are assigned!");
     }
   };
   

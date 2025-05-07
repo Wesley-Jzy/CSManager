@@ -3,7 +3,13 @@ import MapSelection from './MapSelection'
 import TacticsSetup from './TacticsSetup'
 import MatchSimulation from './MatchSimulation'
 import MatchConfirmation from './MatchConfirmation'
-import { MAPS } from './MatchUtils'
+import { 
+  MAPS, 
+  TEAMS,
+  SIDES,
+  FACILITY_BONUSES,
+  GAME_RULES
+} from './MatchUtils'
 
 // 比赛噪声函数，为比赛加入随机因素
 function randomNoise() {
@@ -11,7 +17,7 @@ function randomNoise() {
 }
 
 // 改进的比赛模拟函数，考虑设施升级效果
-function simulateMatch(teamA, teamB, format = 'bo3', facilities = { trainingCenter: 1, gamingHouse: 1, analyticsOffice: 1 }) {
+function simulateMatch(teamA, teamB, format = 'bo1', facilities = { trainingCenter: 1, gamingHouse: 1, analyticsOffice: 1 }) {
   let winsA = 0, winsB = 0
   const requiredWins = format === 'bo1' ? 1 : format === 'bo3' ? 2 : format === 'bo5' ? 3 : 16
 
@@ -20,9 +26,9 @@ function simulateMatch(teamA, teamB, format = 'bo3', facilities = { trainingCent
   const baseB = teamB.reduce((sum, p) => sum + p.aim + p.awareness + p.reflex, 0)
   
   // 应用设施加成
-  const teamWorkBonus = facilities.gamingHouse * 5 / 100; // 游戏之家提供5%/级的团队默契度
-  const prepBonus = facilities.analyticsOffice * 3 / 100; // 分析办公室提供3%/级的比赛准备加成
-  const intelBonus = facilities.analyticsOffice * 5 / 100; // 分析办公室提供5%/级的对手情报准确度
+  const teamWorkBonus = facilities.gamingHouse * FACILITY_BONUSES.GAMING_HOUSE_TEAMWORK;
+  const prepBonus = facilities.analyticsOffice * FACILITY_BONUSES.ANALYTICS_PREP;
+  const intelBonus = facilities.analyticsOffice * FACILITY_BONUSES.ANALYTICS_INTEL;
   
   // 计算总加成
   const facilityMultiplier = 1 + teamWorkBonus + prepBonus;
@@ -148,8 +154,17 @@ function MatchModule({ teamData, setTeamData }) {
   
   // 确认战术和角色设置
   const handleTacticsConfirmed = (tactics) => {
-    setTacticsSetup(tactics)
-    setMatchStage('confirmation')
+    console.log("Tactics confirmed:", tactics);
+    
+    // 确保tactics包含完整的数据结构
+    if (!tactics || !tactics.tactics || !tactics.roles) {
+      console.error("Tactics setup is incomplete:", tactics);
+      alert("战术设置不完整，请重试");
+      return;
+    }
+    
+    setTacticsSetup(tactics);
+    setMatchStage('confirmation');
   }
   
   // 确认比赛信息，开始比赛
@@ -206,11 +221,36 @@ function MatchModule({ teamData, setTeamData }) {
       case 'selection':
         return renderOpponentSelection()
       case 'map':
+        console.log("Rendering MapSelection component with:", { 
+          onMapSelected: handleMapSelect, 
+          previousMapPerformance: mapPerformance 
+        });
+        // 确保MapSelection组件正确导入
+        if (typeof MapSelection !== 'function') {
+          console.error("MapSelection component is not a function:", MapSelection);
+          return <div className="p-4 text-red-600">地图选择组件加载失败</div>;
+        }
         return <MapSelection 
           onMapSelected={handleMapSelect} 
           previousMapPerformance={mapPerformance}
         />
       case 'tactics':
+        console.log("Rendering TacticsSetup component with:", {
+          players: teamData.players ? teamData.players.length : 0,
+          selectedMap,
+          mapData: MAPS[selectedMap] || null,
+          analyticsLevel: teamData.facilities.analyticsOffice
+        });
+        
+        // 确保选中的地图有效
+        if (!selectedMap || !MAPS[selectedMap]) {
+          console.error("Invalid map for TacticsSetup:", selectedMap);
+          const firstMapKey = Object.keys(MAPS)[0];
+          console.log("Falling back to first available map:", firstMapKey);
+          setSelectedMap(firstMapKey);
+          return <div className="p-4 text-center">加载地图数据中...</div>;
+        }
+        
         return <TacticsSetup 
           players={teamData.players}
           selectedMap={MAPS[selectedMap]}
@@ -219,6 +259,22 @@ function MatchModule({ teamData, setTeamData }) {
           opponentInfo={selectedOpponent.info}
         />
       case 'confirmation':
+        console.log("Rendering MatchConfirmation with data:", {
+          teamData,
+          selectedOpponent,
+          mapKey: selectedMap,
+          mapData: MAPS[selectedMap],
+          tacticsSetup
+        });
+        
+        // 确保selectedMap是有效的
+        if (!selectedMap || !MAPS[selectedMap]) {
+          console.error("Invalid map selection:", selectedMap);
+          // 回退到地图选择阶段
+          setMatchStage('map');
+          return <div>正在重定向到地图选择...</div>;
+        }
+        
         return <MatchConfirmation
           teamData={teamData}
           opponentData={{

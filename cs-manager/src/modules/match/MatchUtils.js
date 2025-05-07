@@ -4,7 +4,7 @@
  */
 
 // 游戏规则相关常量
-const GAME_RULES = {
+export const GAME_RULES = {
   ROUNDS_FIRST_HALF: 12,
   TOTAL_NORMAL_ROUNDS: 24,
   WIN_ROUNDS_NORMAL: 13,
@@ -16,26 +16,26 @@ const GAME_RULES = {
 };
 
 // 比赛方相关常量
-const TEAMS = {
+export const TEAMS = {
   HOME: 'A',
   AWAY: 'B'
 };
 
 // 游戏中的阵营
-const SIDES = {
+export const SIDES = {
   T: 'T',
   CT: 'CT'
 };
 
 // 设施加成相关常量
-const FACILITY_BONUSES = {
+export const FACILITY_BONUSES = {
   GAMING_HOUSE_TEAMWORK: 0.05, // 5%/级
   ANALYTICS_PREP: 0.03, // 3%/级
   ANALYTICS_INTEL: 0.05 // 5%/级
 };
 
 // 特殊加成常量
-const SPECIAL_BONUSES = {
+export const SPECIAL_BONUSES = {
   IGL_TEAM_BONUS: 1.1, // 指挥加成10%
   HIGHLIGHT_CHANCE: 0.2, // 亮点生成20%概率
   HIGHLIGHT_THRESHOLD: 0.3, // 分差亮点阈值30%
@@ -43,7 +43,7 @@ const SPECIAL_BONUSES = {
 };
 
 // 随机因子相关常量
-const RANDOM_FACTORS = {
+export const RANDOM_FACTORS = {
   MIN: 0.7,
   MAX: 1.3,
   RANGE: 0.6,
@@ -51,7 +51,7 @@ const RANDOM_FACTORS = {
 };
 
 // 动画相关时间常量
-const ANIMATION_TIMING = {
+export const ANIMATION_TIMING = {
   HIGHLIGHT_DISPLAY: 2000 // 亮点显示时间(ms)
 };
 
@@ -577,4 +577,330 @@ const findMVP = (team, rounds, teamSide) => {
   // 在实际游戏中，这里应该基于选手在回合中的表现计算
   const randomIndex = Math.floor(Math.random() * team.players.length);
   return team.players[randomIndex];
-}; 
+};
+
+/**
+ * 计算一回合中队伍A获胜的数学期望和详细计算过程
+ * 用于提供更详细、透明的胜率计算过程
+ * @param {Object} teamA - A队数据
+ * @param {Object} teamB - B队数据
+ * @param {string} mapKey - 地图键值
+ * @param {Object} facilities - 设施等级
+ * @returns {Object} - 返回详细的胜率计算数据
+ */
+export const calculateMatchupDetails = (teamA, teamB, mapKey, facilities) => {
+  console.log("calculateMatchupDetails called with:", { 
+    teamA: teamA ? `${teamA.players?.length || 0} players, tactics: ${JSON.stringify(teamA.tactics || {})}` : "missing", 
+    teamB: teamB ? `${teamB.players?.length || 0} players` : "missing", 
+    mapKey, 
+    facilities 
+  });
+  
+  // 验证输入参数
+  if (!teamA || !teamA.players || !teamA.roles || !teamA.tactics) {
+    console.error("Invalid teamA data:", teamA);
+    throw new Error("Invalid teamA data structure");
+  }
+  
+  if (!teamA.tactics.T || !teamA.tactics.CT) {
+    console.error("Missing tactics for teamA:", teamA.tactics);
+    teamA.tactics = teamA.tactics || {};
+    teamA.tactics.T = teamA.tactics.T || 'balanced';
+    teamA.tactics.CT = teamA.tactics.CT || 'balanced';
+    console.log("Using default tactics for teamA:", teamA.tactics);
+  }
+  
+  if (!teamB || !teamB.players || !teamB.roles || !teamB.tactics) {
+    console.error("Invalid teamB data:", teamB);
+    throw new Error("Invalid teamB data structure");
+  }
+  
+  if (!teamB.tactics.T || !teamB.tactics.CT) {
+    console.error("Missing tactics for teamB:", teamB.tactics);
+    teamB.tactics = teamB.tactics || {};
+    teamB.tactics.T = teamB.tactics.T || 'balanced';
+    teamB.tactics.CT = teamB.tactics.CT || 'balanced';
+    console.log("Using default tactics for teamB:", teamB.tactics);
+  }
+  
+  if (!mapKey || !MAPS[mapKey]) {
+    console.error("Invalid mapKey:", mapKey, "Available maps:", Object.keys(MAPS));
+    // fallback to a default map if the specified one doesn't exist
+    mapKey = Object.keys(MAPS)[0];
+    console.log("Falling back to default map:", mapKey);
+  }
+  
+  if (!facilities) {
+    console.error("Facilities not provided, using defaults");
+    facilities = { trainingCenter: 1, gamingHouse: 1, analyticsOffice: 1 };
+  }
+  
+  console.log("Proceeding with calculation using validated data");
+
+  try {
+    // ---------- 基础实力计算 ----------
+    // 计算T方和CT方的基础实力
+    const tSideStrengthA = calculateTeamStrength(
+      teamA.players, 
+      teamA.roles, 
+      teamA.tactics[SIDES.T], 
+      mapKey, 
+      SIDES.T
+    );
+    
+    const ctSideStrengthA = calculateTeamStrength(
+      teamA.players, 
+      teamA.roles, 
+      teamA.tactics[SIDES.CT], 
+      mapKey, 
+      SIDES.CT
+    );
+    
+    const tSideStrengthB = calculateTeamStrength(
+      teamB.players, 
+      teamB.roles, 
+      teamB.tactics[SIDES.T], 
+      mapKey, 
+      SIDES.T
+    );
+    
+    const ctSideStrengthB = calculateTeamStrength(
+      teamB.players, 
+      teamB.roles, 
+      teamB.tactics[SIDES.CT], 
+      mapKey, 
+      SIDES.CT
+    );
+
+    // ---------- 设施加成计算 ----------
+    // 应用设施加成
+    const teamWorkBonus = facilities.gamingHouse * FACILITY_BONUSES.GAMING_HOUSE_TEAMWORK;
+    const prepBonus = facilities.analyticsOffice * FACILITY_BONUSES.ANALYTICS_PREP;
+    const intelBonus = facilities.analyticsOffice * FACILITY_BONUSES.ANALYTICS_INTEL;
+    
+    const facilityMultiplier = 1 + teamWorkBonus + prepBonus;
+    
+    // 修正A队实力
+    const modifiedTSideStrengthA = tSideStrengthA * facilityMultiplier;
+    const modifiedCTSideStrengthA = ctSideStrengthA * facilityMultiplier;
+
+    // ---------- 随机因子分析 ----------
+    // 随机因子影响范围
+    const randomFactorRange = {
+      min: RANDOM_FACTORS.MIN,
+      max: RANDOM_FACTORS.MAX,
+      avgImpact: (RANDOM_FACTORS.MAX + RANDOM_FACTORS.MIN) / 2
+    };
+    
+    // 情报优势对对手随机因子的抑制
+    const intelImpact = {
+      positiveReduction: 1 - intelBonus, // 对手正面爆发被抑制的程度
+      minReduction: RANDOM_FACTORS.INTEL_MIN_REDUCTION, // 最小保留爆发可能
+      negativeImprovement: 1 + intelBonus * 0.5 // 对手负面表现被增强的程度
+    };
+
+    // ---------- 回合胜率计算 ----------
+    // T方时的回合胜率
+    // 由于随机因素的存在，我们需要计算数学期望
+    // 简化计算：使用平均实力比计算期望胜率
+    const tSideWinProbabilityA = modifiedTSideStrengthA / (modifiedTSideStrengthA + ctSideStrengthB);
+    const ctSideWinProbabilityA = modifiedCTSideStrengthA / (modifiedCTSideStrengthA + tSideStrengthB);
+    
+    // 考虑随机因素和情报加成后的胜率修正
+    // 这是一个简化的模型，实际胜率会受到每回合具体随机因子的影响
+    const randomFactorImpact = {
+      tSide: calculateRandomImpact(modifiedTSideStrengthA, ctSideStrengthB, intelBonus),
+      ctSide: calculateRandomImpact(modifiedCTSideStrengthA, tSideStrengthB, intelBonus)
+    };
+    
+    // 修正后的胜率（考虑随机因素）
+    const adjustedTSideWinProbabilityA = tSideWinProbabilityA * randomFactorImpact.tSide;
+    const adjustedCTSideWinProbabilityA = ctSideWinProbabilityA * randomFactorImpact.ctSide;
+
+    // ---------- 比赛得分预测 ----------
+    // 估算12回合后的半场比分（期望值）
+    const firstHalfScoreA = GAME_RULES.ROUNDS_FIRST_HALF * tSideWinProbabilityA;
+    const firstHalfScoreB = GAME_RULES.ROUNDS_FIRST_HALF - firstHalfScoreA;
+    
+    const secondHalfScoreA = GAME_RULES.ROUNDS_FIRST_HALF * ctSideWinProbabilityA;
+    const secondHalfScoreB = GAME_RULES.ROUNDS_FIRST_HALF - secondHalfScoreA;
+    
+    // 总比分（期望值）
+    const totalScoreA = firstHalfScoreA + secondHalfScoreA;
+    const totalScoreB = firstHalfScoreB + secondHalfScoreB;
+    
+    // ---------- 比赛胜率估计 ----------
+    // 基于期望比分的胜率
+    const baseWinProbability = totalScoreA > totalScoreB ? 
+      Math.min(0.9, 0.5 + (totalScoreA - totalScoreB) * 0.05) :
+      Math.max(0.1, 0.5 - (totalScoreB - totalScoreA) * 0.05);
+    
+    // 考虑随机因素的胜率
+    // 简化模型：使用Monte Carlo模拟的结果（不实际执行模拟以提高性能）
+    const simulatedWinProbability = baseWinProbability;
+
+    // ---------- 选手属性详情 ----------
+    // 计算各个选手的有效属性
+    const playerEffectiveStats = teamA.players.map((player, index) => {
+      const role = teamA.roles[index];
+      const roleData = ROLES[role] || ROLES.lurker; // 使用默认角色作为回退
+      
+      // T方属性
+      const tTacticData = TACTICS[teamA.tactics[SIDES.T]] || TACTICS.balanced;
+      const tAim = player.aim * roleData.aimMultiplier * tTacticData.aimMultiplier;
+      const tAwareness = player.awareness * roleData.awarenessMultiplier * tTacticData.awarenessMultiplier;
+      const tReflex = player.reflex * roleData.reflexMultiplier * tTacticData.reflexMultiplier;
+      
+      // CT方属性
+      const ctTacticData = TACTICS[teamA.tactics[SIDES.CT]] || TACTICS.balanced;
+      const ctAim = player.aim * roleData.aimMultiplier * ctTacticData.aimMultiplier;
+      const ctAwareness = player.awareness * roleData.awarenessMultiplier * ctTacticData.awarenessMultiplier;
+      const ctReflex = player.reflex * roleData.reflexMultiplier * ctTacticData.reflexMultiplier;
+      
+      return {
+        player,
+        role,
+        baseStats: {
+          aim: player.aim,
+          awareness: player.awareness,
+          reflex: player.reflex
+        },
+        roleMultipliers: {
+          aim: roleData.aimMultiplier,
+          awareness: roleData.awarenessMultiplier,
+          reflex: roleData.reflexMultiplier
+        },
+        tSideTacticMultipliers: {
+          aim: tTacticData.aimMultiplier,
+          awareness: tTacticData.awarenessMultiplier,
+          reflex: tTacticData.reflexMultiplier
+        },
+        ctSideTacticMultipliers: {
+          aim: ctTacticData.aimMultiplier,
+          awareness: ctTacticData.awarenessMultiplier,
+          reflex: ctTacticData.reflexMultiplier
+        },
+        effectiveStats: {
+          [SIDES.T]: { aim: tAim, awareness: tAwareness, reflex: tReflex, total: tAim + tAwareness + tReflex },
+          [SIDES.CT]: { aim: ctAim, awareness: ctAwareness, reflex: ctReflex, total: ctAim + ctAwareness + ctReflex }
+        }
+      };
+    });
+    
+    // 返回完整的计算过程详情
+    const result = {
+      // 地图数据
+      map: MAPS[mapKey] || Object.values(MAPS)[0], // 保证始终有一个有效的地图对象
+      
+      // 基础实力
+      baseStrength: {
+        tSide: { A: tSideStrengthA, B: tSideStrengthB },
+        ctSide: { A: ctSideStrengthA, B: ctSideStrengthB }
+      },
+      
+      // 设施加成
+      facilityBonus: {
+        teamWorkBonus: Math.round(teamWorkBonus * 100),
+        prepBonus: Math.round(prepBonus * 100),
+        intelBonus: Math.round(intelBonus * 100),
+        totalMultiplier: facilityMultiplier,
+        totalBonus: Math.round((facilityMultiplier - 1) * 100)
+      },
+      
+      // 加成后实力
+      modifiedStrength: {
+        tSide: { A: modifiedTSideStrengthA, B: tSideStrengthB },
+        ctSide: { A: modifiedCTSideStrengthA, B: ctSideStrengthB }
+      },
+      
+      // 随机因子分析
+      randomFactors: {
+        range: randomFactorRange,
+        intelImpact: intelImpact,
+        impact: randomFactorImpact
+      },
+      
+      // 回合胜率
+      roundWinProbability: {
+        tSide: { base: tSideWinProbabilityA, adjusted: adjustedTSideWinProbabilityA },
+        ctSide: { base: ctSideWinProbabilityA, adjusted: adjustedCTSideWinProbabilityA }
+      },
+      
+      // 期望比分
+      expectedScores: {
+        firstHalf: { A: firstHalfScoreA, B: firstHalfScoreB },
+        secondHalf: { A: secondHalfScoreA, B: secondHalfScoreB },
+        total: { A: totalScoreA, B: totalScoreB }
+      },
+      
+      // 胜率
+      winProbability: {
+        base: baseWinProbability,
+        simulated: simulatedWinProbability
+      },
+      
+      // 选手详情
+      playerDetails: playerEffectiveStats,
+      
+      // 回合模拟公式说明
+      formula: {
+        roundWinner: "回合胜者由双方实力 * 随机因子决定，随机因子范围为0.7-1.3",
+        randomFactor: "A队随机因子为纯随机，B队正面随机因子(>1)会被A队情报加成抑制",
+        facilityMultiplier: "设施加成会乘以A队基础实力",
+        winProbability: "基于期望得分，每1分差距影响胜率5%，最高90%，最低10%"
+      }
+    };
+    
+    console.log("Successfully created match details");
+    return result;
+  } catch (error) {
+    console.error("Error in calculateMatchupDetails:", error);
+    
+    // 返回基础回退对象
+    return {
+      map: MAPS[mapKey] || Object.values(MAPS)[0],
+      baseStrength: { tSide: { A: 0, B: 0 }, ctSide: { A: 0, B: 0 } },
+      facilityBonus: { teamWorkBonus: 0, prepBonus: 0, intelBonus: 0, totalBonus: 0, totalMultiplier: 1 },
+      modifiedStrength: { tSide: { A: 0, B: 0 }, ctSide: { A: 0, B: 0 } },
+      randomFactors: { 
+        range: { min: RANDOM_FACTORS.MIN, max: RANDOM_FACTORS.MAX },
+        impact: { tSide: 1, ctSide: 1 }
+      },
+      roundWinProbability: { tSide: { base: 0.5, adjusted: 0.5 }, ctSide: { base: 0.5, adjusted: 0.5 } },
+      expectedScores: {
+        firstHalf: { A: 6, B: 6 },
+        secondHalf: { A: 6, B: 6 },
+        total: { A: 12, B: 12 }
+      },
+      winProbability: { base: 0.5, simulated: 0.5 },
+      playerDetails: [],
+      formula: {
+        roundWinner: "error in calculation",
+        randomFactor: "error in calculation",
+        facilityMultiplier: "error in calculation",
+        winProbability: "error in calculation"
+      }
+    };
+  }
+};
+
+/**
+ * 计算随机因子平均影响
+ * 这是一个辅助函数，用于估算随机因子对胜率的平均影响
+ * @param {number} strengthA - A队实力
+ * @param {number} strengthB - B队实力
+ * @param {number} intelBonus - 情报加成
+ * @returns {number} - 返回随机因子对胜率的估计影响
+ */
+function calculateRandomImpact(strengthA, strengthB, intelBonus) {
+  // 这是一个简化模型，实际应该通过Monte Carlo模拟获得
+  // 此处假设随机因子对胜率的影响与实力差距和情报加成相关
+  const strengthRatio = strengthA / strengthB;
+  
+  // 当实力相当时，随机因子影响最大
+  const baseImpact = 1.0;
+  const strengthImpact = Math.pow(0.95, Math.abs(strengthRatio - 1) * 10);
+  const intelImpact = 1 + intelBonus * 0.2; // 情报加成会轻微增加自己的胜率
+  
+  return baseImpact * strengthImpact * intelImpact;
+} 
